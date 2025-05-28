@@ -1,0 +1,90 @@
+/* Custom styles for Agri-Connect */
+
+/* General styles */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* Hero section */
+.hero-section {
+    padding: 4rem 0;
+    background-color: #f8f9fa;
+}
+
+/* Product cards */
+.product-card {
+    border: 1px solid #dee2e6;
+    border-radius: 0.5rem;
+    transition: transform 0.2s;
+    margin-bottom: 1.5rem;
+}
+
+.product-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.product-card img {
+    border-radius: 0.5rem 0.5rem 0 0;
+    object-fit: cover;
+    height: 200px;
+    width: 100%;
+}
+
+/* Custom button styles */
+.btn-primary {
+    background-color: #2e7d32;
+    border-color: #2e7d32;
+}
+
+.btn-primary:hover {
+    background-color: #1b5e20;
+    border-color: #1b5e20;
+}
+
+.btn-outline-primary {
+    color: #2e7d32;
+    border-color: #2e7d32;
+}
+
+.btn-outline-primary:hover {
+    background-color: #2e7d32;
+    border-color: #2e7d32;
+}
+
+/* Footer */
+footer {
+    margin-top: 3rem;
+    padding: 2rem 0;
+    background-color: #f8f9fa;
+}
+
+/* Form styles */
+.form-container {
+    max-width: 600px;
+    margin: 2rem auto;
+    padding: 2rem;
+    border-radius: 0.5rem;
+    box-shadow: 0 0 15px rgba(0,0,0,0.1);
+}
+
+/* Navigation */
+.navbar {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.navbar-brand {
+    font-weight: bold;
+    color: #2e7d32 !important;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .hero-section {
+        padding: 2rem 0;
+    }
+    
+    .product-card img {
+        height: 150px;
+    }
+} 
