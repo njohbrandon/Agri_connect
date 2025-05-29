@@ -1,19 +1,9 @@
 <?php
-require_once '../includes/functions.php';
+require_once '../includes/session.php';
 
-// Clear all session variables
-$_SESSION = array();
+// Clear all session data
+clearSession();
 
-// Destroy the session cookie
-if (isset($_COOKIE[session_name()])) {
-    setcookie(session_name(), '', time() - 3600, '/');
-}
-
-// Destroy the session
-session_destroy();
-
-// Redirect to home page with message
-$_SESSION['message'] = "You have been successfully logged out.";
-$_SESSION['message_type'] = "success";
-header("Location: ../index.php");
+// Redirect to login page with logout message
+header('Location: login.php?msg=logged_out');
 exit(); 

@@ -1,31 +1,32 @@
 <?php
 require_once '../config/database.php';
 require_once '../includes/functions.php';
+require_once '../includes/session.php';
 
-// Require login
+// Require login for this page
 requireLogin();
 
-// Get farmer details
-$farmer = getFarmerDetails($_SESSION['farmer_id']);
+// Get farmer's information
+try {
+    $stmt = $pdo->prepare('SELECT * FROM farmers WHERE id = ?');
+    $stmt->execute([$_SESSION['farmer_id']]);
+    $farmer = $stmt->fetch();
 
-// Get farmer's products count
-$stmt = $conn->prepare("SELECT 
-    COUNT(*) as total_products,
-    COUNT(CASE WHEN status = 'active' THEN 1 END) as active_products
-    FROM products 
-    WHERE farmer_id = ?");
-$stmt->bind_param("i", $_SESSION['farmer_id']);
-$stmt->execute();
-$product_stats = $stmt->get_result()->fetch_assoc();
+    // Get farmer's products count
+    $stmt = $pdo->prepare('SELECT COUNT(*) as product_count FROM products WHERE farmer_id = ?');
+    $stmt->execute([$_SESSION['farmer_id']]);
+    $product_count = $stmt->fetch()['product_count'];
 
-// Get recent products
-$stmt = $conn->prepare("SELECT * FROM products 
-    WHERE farmer_id = ? 
-    ORDER BY created_at DESC 
-    LIMIT 5");
-$stmt->bind_param("i", $_SESSION['farmer_id']);
-$stmt->execute();
-$recent_products = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    // Get recent products
+    $stmt = $pdo->prepare('SELECT * FROM products WHERE farmer_id = ? ORDER BY created_at DESC LIMIT 5');
+    $stmt->execute([$_SESSION['farmer_id']]);
+    $recent_products = $stmt->fetchAll();
+} catch (PDOException $e) {
+    error_log($e->getMessage());
+    $error = 'An error occurred while fetching your information.';
+}
+
+$page_title = 'Farmer Dashboard';
 ?>
 
 <!DOCTYPE html>
@@ -33,7 +34,7 @@ $recent_products = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Farmer Dashboard - Agri-Connect</title>
+    <title><?php echo $page_title; ?> - Agri-Connect</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
     <link href="../assets/css/style.css" rel="stylesheet">
@@ -65,128 +66,139 @@ $recent_products = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 <body>
     <?php include '../includes/header.php'; ?>
 
-    <div class="container py-4">
-        <?php if (isset($_SESSION['message'])): ?>
-            <div class="alert alert-<?php echo $_SESSION['message_type']; ?> alert-dismissible fade show">
-                <?php 
-                echo $_SESSION['message'];
-                unset($_SESSION['message']);
-                unset($_SESSION['message_type']);
-                ?>
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-        <?php endif; ?>
-
-        <div class="row mb-4">
-            <div class="col-md-8">
-                <h2>Welcome back, <?php echo htmlspecialchars($farmer['name']); ?>!</h2>
-                <p class="text-muted">Manage your products and profile from your dashboard</p>
-            </div>
-            <div class="col-md-4 text-md-end">
-                <a href="add_product.php" class="btn btn-primary">
-                    <i class="bi bi-plus-circle"></i> Add New Product
-                </a>
-            </div>
-        </div>
-
-        <!-- Stats Cards -->
-        <div class="row mb-4">
-            <div class="col-md-4 mb-3">
-                <div class="dashboard-card stat-card p-4">
-                    <h3 class="h5 mb-3">Total Products</h3>
-                    <h2 class="display-5 mb-0"><?php echo $product_stats['total_products']; ?></h2>
-                </div>
-            </div>
-            <div class="col-md-4 mb-3">
-                <div class="dashboard-card stat-card p-4">
-                    <h3 class="h5 mb-3">Active Products</h3>
-                    <h2 class="display-5 mb-0"><?php echo $product_stats['active_products']; ?></h2>
-                </div>
-            </div>
-            <div class="col-md-4 mb-3">
-                <div class="dashboard-card stat-card p-4">
-                    <h3 class="h5 mb-3">Profile Views</h3>
-                    <h2 class="display-5 mb-0">0</h2>
-                </div>
-            </div>
-        </div>
-
+    <div class="container py-5">
         <div class="row">
-            <!-- Quick Actions -->
-            <div class="col-md-4 mb-4">
-                <div class="dashboard-card p-4">
-                    <h3 class="h4 mb-4">Quick Actions</h3>
-                    <div class="d-grid gap-3">
-                        <a href="add_product.php" class="quick-action d-flex align-items-center p-3 bg-light rounded">
-                            <i class="bi bi-plus-circle fs-4 me-3"></i>
-                            <div>
-                                <h4 class="h6 mb-1">Add New Product</h4>
-                                <small class="text-muted">List a new product for sale</small>
-                            </div>
-                        </a>
-                        <a href="products.php" class="quick-action d-flex align-items-center p-3 bg-light rounded">
-                            <i class="bi bi-grid fs-4 me-3"></i>
-                            <div>
-                                <h4 class="h6 mb-1">Manage Products</h4>
-                                <small class="text-muted">Edit or update your products</small>
-                            </div>
-                        </a>
-                        <a href="profile.php" class="quick-action d-flex align-items-center p-3 bg-light rounded">
-                            <i class="bi bi-person fs-4 me-3"></i>
-                            <div>
-                                <h4 class="h6 mb-1">Update Profile</h4>
-                                <small class="text-muted">Edit your profile information</small>
-                            </div>
-                        </a>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Profile Overview -->
-            <div class="col-md-4 mb-4">
-                <div class="dashboard-card p-4">
-                    <h3 class="h4 mb-4">Profile Overview</h3>
-                    <div class="mb-3">
-                        <label class="text-muted mb-1">Name</label>
-                        <p class="mb-3"><?php echo htmlspecialchars($farmer['name']); ?></p>
-                        
-                        <label class="text-muted mb-1">Email</label>
-                        <p class="mb-3"><?php echo htmlspecialchars($farmer['email']); ?></p>
-                        
-                        <label class="text-muted mb-1">Phone</label>
-                        <p class="mb-3"><?php echo htmlspecialchars($farmer['phone']); ?></p>
-                        
-                        <label class="text-muted mb-1">Address</label>
-                        <p class="mb-3"><?php echo htmlspecialchars($farmer['address']); ?></p>
-                    </div>
-                    <a href="profile.php" class="btn btn-outline-primary btn-sm">
-                        Edit Profile
-                    </a>
-                </div>
-            </div>
-
-            <!-- Recent Products -->
-            <div class="col-md-4 mb-4">
-                <div class="dashboard-card p-4">
-                    <h3 class="h4 mb-4">Recent Products</h3>
-                    <?php if (empty($recent_products)): ?>
-                        <p class="text-muted">No products added yet.</p>
-                    <?php else: ?>
-                        <div class="d-grid gap-3">
-                            <?php foreach ($recent_products as $product): ?>
-                                <div class="product-item p-3 bg-light rounded">
-                                    <h4 class="h6 mb-1"><?php echo htmlspecialchars($product['name']); ?></h4>
-                                    <p class="text-muted small mb-2">
-                                        Price: $<?php echo formatPrice($product['price']); ?>/<?php echo htmlspecialchars($product['unit']); ?>
-                                    </p>
-                                    <span class="badge bg-<?php echo $product['status'] === 'active' ? 'success' : 'secondary'; ?>">
-                                        <?php echo ucfirst($product['status']); ?>
-                                    </span>
-                                </div>
-                            <?php endforeach; ?>
+            <!-- Sidebar -->
+            <div class="col-lg-3 mb-4">
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <div class="text-center mb-3">
+                            <i class="bi bi-person-circle display-4 text-success"></i>
+                            <h5 class="mt-2"><?php echo htmlspecialchars($farmer['name']); ?></h5>
+                            <p class="text-muted mb-0"><?php echo htmlspecialchars($farmer['email']); ?></p>
                         </div>
-                        <a href="products.php" class="btn btn-link btn-sm mt-3">View All Products</a>
-                    <?php endif; ?>
+                        <hr>
+                        <nav class="nav flex-column">
+                            <a class="nav-link active" href="dashboard.php">
+                                <i class="bi bi-speedometer2"></i> Dashboard
+                            </a>
+                            <a class="nav-link" href="products.php">
+                                <i class="bi bi-box"></i> My Products
+                                <span class="badge bg-success rounded-pill float-end"><?php echo $product_count; ?></span>
+                            </a>
+                            <a class="nav-link" href="add_product.php">
+                                <i class="bi bi-plus-circle"></i> Add Product
+                            </a>
+                            <a class="nav-link" href="profile.php">
+                                <i class="bi bi-person"></i> Profile
+                            </a>
+                            <a class="nav-link text-danger" href="logout.php">
+                                <i class="bi bi-box-arrow-right"></i> Logout
+                            </a>
+                        </nav>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="col-lg-9">
+                <!-- Welcome Card -->
+                <div class="card shadow-sm mb-4">
+                    <div class="card-body">
+                        <h2 class="card-title h4">Welcome back, <?php echo htmlspecialchars($farmer['name']); ?>!</h2>
+                        <p class="card-text text-muted">
+                            Here's an overview of your account and recent activity.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Stats Row -->
+                <div class="row g-4 mb-4">
+                    <div class="col-md-4">
+                        <div class="card shadow-sm h-100">
+                            <div class="card-body">
+                                <div class="d-flex align-items-center">
+                                    <div class="flex-shrink-0">
+                                        <i class="bi bi-box text-success display-6"></i>
+                                    </div>
+                                    <div class="flex-grow-1 ms-3">
+                                        <h6 class="card-title mb-1">Total Products</h6>
+                                        <h2 class="mb-0"><?php echo $product_count; ?></h2>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Add more stat cards here as needed -->
+                </div>
+
+                <!-- Recent Products -->
+                <div class="card shadow-sm">
+                    <div class="card-header bg-transparent">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Recent Products</h5>
+                            <a href="products.php" class="btn btn-sm btn-outline-success">
+                                View All
+                            </a>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <?php if (empty($recent_products)): ?>
+                            <p class="text-muted text-center mb-0">
+                                You haven't added any products yet.
+                                <a href="add_product.php">Add your first product</a>
+                            </p>
+                        <?php else: ?>
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th>Product</th>
+                                            <th>Price</th>
+                                            <th>Status</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($recent_products as $product): ?>
+                                            <tr>
+                                                <td>
+                                                    <div class="d-flex align-items-center">
+                                                        <img src="<?php echo !empty($product['image']) ? '../uploads/products/' . $product['image'] : '../assets/images/default-product.jpg'; ?>"
+                                                             class="rounded" width="40" height="40" alt="">
+                                                        <div class="ms-2">
+                                                            <h6 class="mb-0"><?php echo htmlspecialchars($product['name']); ?></h6>
+                                                            <small class="text-muted">
+                                                                Added: <?php echo date('M j, Y', strtotime($product['created_at'])); ?>
+                                                            </small>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td>$<?php echo number_format($product['price'], 2); ?></td>
+                                                <td>
+                                                    <span class="badge bg-<?php echo $product['status'] === 'active' ? 'success' : 'secondary'; ?>">
+                                                        <?php echo ucfirst($product['status']); ?>
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <div class="btn-group btn-group-sm">
+                                                        <a href="edit_product.php?id=<?php echo $product['id']; ?>" 
+                                                           class="btn btn-outline-secondary">
+                                                            <i class="bi bi-pencil"></i>
+                                                        </a>
+                                                        <button type="button" class="btn btn-outline-danger" 
+                                                                onclick="confirmDelete(<?php echo $product['id']; ?>)">
+                                                            <i class="bi bi-trash"></i>
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php endif; ?>
+                    </div>
                 </div>
             </div>
         </div>
@@ -195,6 +207,12 @@ $recent_products = $stmt->get_result()->fetch_all(MYSQLI_ASSOC);
     <?php include '../includes/footer.php'; ?>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="../assets/js/main.js"></script>
+    <script>
+        function confirmDelete(productId) {
+            if (confirm('Are you sure you want to delete this product?')) {
+                window.location.href = `delete_product.php?id=${productId}`;
+            }
+        }
+    </script>
 </body>
 </html> 

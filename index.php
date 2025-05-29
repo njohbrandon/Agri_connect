@@ -19,6 +19,7 @@ $featured_products = getFeaturedProducts(6);
     <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
     <!-- Custom CSS -->
     <link href="assets/css/style.css" rel="stylesheet">
+
 </head>
 <body>
     <!-- Navigation -->

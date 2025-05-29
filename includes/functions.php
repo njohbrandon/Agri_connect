@@ -1,26 +1,5 @@
 <?php
-// Start session if not already started
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
-/**
- * Check if user is logged in
- * @return bool
- */
-function isLoggedIn() {
-    return isset($_SESSION['farmer_id']);
-}
-
-/**
- * Redirect to login page if not logged in
- */
-function requireLogin() {
-    if (!isLoggedIn()) {
-        header("Location: /farmer/login.php");
-        exit();
-    }
-}
+// Session is handled in session.php
 
 /**
  * Sanitize user input
