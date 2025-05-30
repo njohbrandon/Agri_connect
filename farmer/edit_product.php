@@ -241,11 +241,11 @@ $page_title = 'Edit Product';
                                 </div>
 
                                 <div class="col-md-4">
-                                    <label for="price" class="form-label">Price *</label>
+                                    <label for="price" class="form-label">Price (XAF) *</label>
                                     <div class="input-group">
-                                        <span class="input-group-text">$</span>
+                                        <span class="input-group-text">XAF</span>
                                         <input type="number" class="form-control" id="price" name="price" 
-                                               step="0.01" min="0" required
+                                               step="100" min="0" required
                                                value="<?php echo htmlspecialchars($product['price']); ?>">
                                     </div>
                                     <div class="invalid-feedback">

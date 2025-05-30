@@ -42,12 +42,62 @@ function uploadImage($file, $destination) {
 }
 
 /**
- * Format price
+ * Format price in XAF
  * @param float $price
  * @return string
  */
 function formatPrice($price) {
-    return number_format($price, 2);
+    return number_format($price, 0, '.', ',') . ' XAF';
+}
+
+/**
+ * Generate WhatsApp link with message
+ * @param string $phone
+ * @param string $message
+ * @return string
+ */
+function getWhatsAppLink($phone, $message = '') {
+    // Remove any non-digit characters
+    $phone = preg_replace('/[^0-9]/', '', $phone);
+    
+    // If number starts with 0, replace with 237
+    if (substr($phone, 0, 1) === '0') {
+        $phone = '237' . substr($phone, 1);
+    }
+    // If number doesn't have country code, add it
+    elseif (substr($phone, 0, 3) !== '237') {
+        $phone = '237' . $phone;
+    }
+    
+    $url = 'https://wa.me/' . $phone;
+    if (!empty($message)) {
+        $url .= '?text=' . urlencode($message);
+    }
+    
+    return $url;
+}
+
+/**
+ * Format phone number for display
+ * @param string $phone
+ * @return string
+ */
+function formatPhoneNumber($phone) {
+    // Remove any non-digit characters
+    $phone = preg_replace('/[^0-9]/', '', $phone);
+    
+    // If number starts with 0, replace with +237
+    if (substr($phone, 0, 1) === '0') {
+        $phone = '+237' . substr($phone, 1);
+    }
+    // If number doesn't have country code, add it
+    elseif (substr($phone, 0, 3) !== '237') {
+        $phone = '+237' . $phone;
+    } elseif (substr($phone, 0, 3) === '237') {
+        $phone = '+' . $phone;
+    }
+    
+    return $phone;
 }
 
 /**
@@ -56,15 +106,16 @@ function formatPrice($price) {
  * @return array|false
  */
 function getFarmerDetails($farmerId) {
-    global $conn;
+    global $pdo;
     
-    $stmt = $conn->prepare("SELECT id, name, email, phone, address FROM farmers WHERE id = ?");
-    $stmt->bind_param("i", $farmerId);
-    $stmt->execute();
-    $result = $stmt->get_result();
+    $stmt = $pdo->prepare("SELECT id, name, email, phone, address FROM farmers WHERE id = ?");
+    $stmt->execute([$farmerId]);
+    $farmer = $stmt->fetch();
     
-    if ($result->num_rows > 0) {
-        return $result->fetch_assoc();
+    if ($farmer) {
+        // Format phone number for display
+        $farmer['phone'] = formatPhoneNumber($farmer['phone']);
+        return $farmer;
     }
     
     return false;
@@ -76,18 +127,21 @@ function getFarmerDetails($farmerId) {
  * @return array|false
  */
 function getProductDetails($productId) {
-    global $conn;
+    global $pdo;
     
-    $stmt = $conn->prepare("SELECT p.*, f.name as farmer_name, f.phone as farmer_phone 
-                           FROM products p 
-                           JOIN farmers f ON p.farmer_id = f.id 
-                           WHERE p.id = ?");
-    $stmt->bind_param("i", $productId);
-    $stmt->execute();
-    $result = $stmt->get_result();
+    $stmt = $pdo->prepare("SELECT p.*, f.name as farmer_name, f.phone as farmer_phone, f.address as farmer_location 
+                          FROM products p 
+                          JOIN farmers f ON p.farmer_id = f.id 
+                          WHERE p.id = ?");
+    $stmt->execute([$productId]);
+    $product = $stmt->fetch();
     
-    if ($result->num_rows > 0) {
-        return $result->fetch_assoc();
+    if ($product) {
+        // Format phone number and generate WhatsApp link
+        $product['farmer_phone'] = formatPhoneNumber($product['farmer_phone']);
+        $product['whatsapp_link'] = getWhatsAppLink($product['farmer_phone'], 
+            "Hi, I'm interested in your product: " . $product['name']);
+        return $product;
     }
     
     return false;
@@ -99,23 +153,23 @@ function getProductDetails($productId) {
  * @return array
  */
 function getFeaturedProducts($limit = 6) {
-    global $conn;
+    global $pdo;
     
-    $sql = "SELECT p.*, f.name as farmer_name 
+    $sql = "SELECT p.*, f.name as farmer_name, f.phone as farmer_phone, f.address as farmer_location 
             FROM products p 
             JOIN farmers f ON p.farmer_id = f.id 
             WHERE p.status = 'active' 
             ORDER BY p.created_at DESC 
             LIMIT ?";
     
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("i", $limit);
-    $stmt->execute();
-    $result = $stmt->get_result();
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([$limit]);
+    $products = $stmt->fetchAll();
     
-    $products = [];
-    while ($row = $result->fetch_assoc()) {
-        $products[] = $row;
+    foreach ($products as &$product) {
+        $product['farmer_phone'] = formatPhoneNumber($product['farmer_phone']);
+        $product['whatsapp_link'] = getWhatsAppLink($product['farmer_phone'], 
+            "Hi, I'm interested in your product: " . $product['name']);
     }
     
     return $products;
@@ -128,9 +182,9 @@ function getFeaturedProducts($limit = 6) {
  * @return array
  */
 function searchProducts($query, $filters = []) {
-    global $conn;
+    global $pdo;
     
-    $sql = "SELECT p.*, f.name as farmer_name 
+    $sql = "SELECT p.*, f.name as farmer_name, f.phone as farmer_phone, f.address as farmer_location 
             FROM products p 
             JOIN farmers f ON p.farmer_id = f.id 
             WHERE p.status = 'active' 
@@ -138,36 +192,32 @@ function searchProducts($query, $filters = []) {
     
     $searchTerm = "%$query%";
     $params = [$searchTerm, $searchTerm];
-    $types = "ss";
     
     if (!empty($filters['category'])) {
         $sql .= " AND p.category = ?";
         $params[] = $filters['category'];
-        $types .= "s";
     }
     
     if (!empty($filters['min_price'])) {
         $sql .= " AND p.price >= ?";
         $params[] = $filters['min_price'];
-        $types .= "d";
     }
     
     if (!empty($filters['max_price'])) {
         $sql .= " AND p.price <= ?";
         $params[] = $filters['max_price'];
-        $types .= "d";
     }
     
     $sql .= " ORDER BY p.created_at DESC";
     
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param($types, ...$params);
-    $stmt->execute();
-    $result = $stmt->get_result();
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $products = $stmt->fetchAll();
     
-    $products = [];
-    while ($row = $result->fetch_assoc()) {
-        $products[] = $row;
+    foreach ($products as &$product) {
+        $product['farmer_phone'] = formatPhoneNumber($product['farmer_phone']);
+        $product['whatsapp_link'] = getWhatsAppLink($product['farmer_phone'], 
+            "Hi, I'm interested in your product: " . $product['name']);
     }
     
     return $products;

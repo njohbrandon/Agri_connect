@@ -198,16 +198,23 @@ $page_title = 'My Products';
                                 <p class="card-text">
                                     <?php echo htmlspecialchars(substr($product['description'], 0, 100)) . '...'; ?>
                                 </p>
-                                <h6 class="mb-3">$<?php echo number_format($product['price'], 2); ?></h6>
-                                <div class="btn-group w-100">
-                                    <a href="edit_product.php?id=<?php echo $product['id']; ?>" 
-                                       class="btn btn-outline-primary">
-                                        <i class="bi bi-pencil"></i> Edit
-                                    </a>
-                                    <button type="button" class="btn btn-outline-danger"
-                                            onclick="confirmDelete(<?php echo $product['id']; ?>)">
-                                        <i class="bi bi-trash"></i> Delete
-                                    </button>
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <h6 class="mb-0"><?php echo formatPrice($product['price']); ?></h6>
+                                    <div>
+                                        <a href="<?php echo getWhatsAppLink($farmer['phone'], 'Hi, I\'m interested in your product: ' . $product['name']); ?>" 
+                                           class="btn btn-success btn-sm" target="_blank">
+                                            <i class="bi bi-whatsapp"></i> WhatsApp
+                                        </a>
+                                        <a href="edit_product.php?id=<?php echo $product['id']; ?>" 
+                                           class="btn btn-primary btn-sm">
+                                            <i class="bi bi-pencil"></i> Edit
+                                        </a>
+                                        <a href="delete_product.php?id=<?php echo $product['id']; ?>" 
+                                           class="btn btn-danger btn-sm"
+                                           onclick="return confirm('Are you sure you want to delete this product?');">
+                                            <i class="bi bi-trash"></i> Delete
+                                        </a>
+                                    </div>
                                 </div>
                             </div>
                         </div>

@@ -9,13 +9,18 @@ requireLogin();
 $error = '';
 $success = '';
 
-// Get categories for dropdown
+// Get categories for dropdown and farmer information
 try {
     $stmt = $pdo->query('SELECT * FROM categories ORDER BY name');
     $categories = $stmt->fetchAll();
+
+    // Get farmer details
+    $stmt = $pdo->prepare('SELECT * FROM farmers WHERE id = ?');
+    $stmt->execute([$_SESSION['farmer_id']]);
+    $farmer = $stmt->fetch();
 } catch (PDOException $e) {
     error_log($e->getMessage());
-    $error = 'An error occurred while fetching categories.';
+    $error = 'An error occurred while fetching data.';
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -31,13 +36,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $unit = htmlspecialchars(trim($_POST['unit'] ?? ''));
     $quantity = filter_input(INPUT_POST, 'quantity', FILTER_VALIDATE_INT);
     $status = htmlspecialchars(trim($_POST['status'] ?? ''));
+    $phone = htmlspecialchars(trim($_POST['phone'] ?? ''));
+    $location = htmlspecialchars(trim($_POST['location'] ?? ''));
 
     // Debug log
     error_log('POST data received: ' . print_r($_POST, true));
 
     // Validate required fields
     if (empty($name) || empty($category_id) || empty($description) || 
-        empty($price) || empty($unit) || empty($quantity)) {
+        empty($price) || empty($unit) || empty($quantity) || empty($phone) || empty($location)) {
         $error = 'Please fill in all required fields.';
         error_log('Validation failed: Missing required fields');
     } else {
@@ -50,11 +57,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Debug log
             error_log('Farmer ID from session: ' . $_SESSION['farmer_id']);
 
-            // Verify category exists
-            $stmt = $pdo->prepare('SELECT id FROM categories WHERE id = ?');
-            $stmt->execute([$category_id]);
-            if (!$stmt->fetch()) {
-                throw new Exception('Invalid category selected.');
+            // Update farmer's phone and location if changed
+            if ($phone !== $farmer['phone'] || $location !== $farmer['address']) {
+                $stmt = $pdo->prepare('UPDATE farmers SET phone = ?, address = ? WHERE id = ?');
+                $stmt->execute([$phone, $location, $_SESSION['farmer_id']]);
             }
 
             // Start transaction
@@ -82,22 +88,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $status ?? 'active'
             ];
 
-            // Debug log
-            error_log('Executing product insert with params: ' . print_r($params, true));
-
             $stmt->execute($params);
             $product_id = $pdo->lastInsertId();
-
-            error_log('Product inserted successfully with ID: ' . $product_id);
 
             // Handle image upload if present
             if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
                 $file = $_FILES['image'];
                 $allowed_types = ['image/jpeg', 'image/png', 'image/gif'];
                 $max_size = 5 * 1024 * 1024; // 5MB
-
-                // Debug log
-                error_log('Processing image upload: ' . print_r($file, true));
 
                 if (!in_array($file['type'], $allowed_types)) {
                     throw new Exception('Invalid file type. Only JPG, PNG and GIF are allowed.');
@@ -110,45 +108,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Generate unique filename
                 $ext = pathinfo($file['name'], PATHINFO_EXTENSION);
                 $filename = uniqid() . '.' . $ext;
-                
-                // Use absolute path for XAMPP
-                $upload_path = $_SERVER['DOCUMENT_ROOT'] . '/farmers_market_place/uploads/products/';
-                
-                error_log('Upload path: ' . $upload_path);
+                $upload_path = '../uploads/products/';
 
                 // Create upload directory if it doesn't exist
                 if (!file_exists($upload_path)) {
-                    error_log('Creating upload directory: ' . $upload_path);
-                    if (!mkdir($upload_path, 0777, true)) {
-                        throw new Exception('Failed to create upload directory. Path: ' . $upload_path);
-                    }
+                    mkdir($upload_path, 0777, true);
                 }
-
-                // Ensure directory is writable
-                if (!is_writable($upload_path)) {
-                    error_log('Upload directory is not writable: ' . $upload_path);
-                    throw new Exception('Upload directory is not writable. Please check permissions.');
-                }
-
-                $target_file = $upload_path . $filename;
-                error_log('Attempting to move uploaded file to: ' . $target_file);
 
                 // Move uploaded file
-                if (!move_uploaded_file($file['tmp_name'], $target_file)) {
-                    $upload_error = error_get_last();
-                    throw new Exception('Failed to upload image. Error: ' . ($upload_error ? $upload_error['message'] : 'Unknown error'));
+                if (move_uploaded_file($file['tmp_name'], $upload_path . $filename)) {
+                    // Update product with image filename
+                    $stmt = $pdo->prepare('UPDATE products SET image = ? WHERE id = ?');
+                    $stmt->execute([$filename, $product_id]);
+                } else {
+                    throw new Exception('Failed to upload image.');
                 }
-
-                error_log('File uploaded successfully to: ' . $target_file);
-
-                // Update product with image filename
-                $stmt = $pdo->prepare('UPDATE products SET image = ? WHERE id = ?');
-                $stmt->execute([$filename, $product_id]);
             }
 
             // Commit transaction
             $pdo->commit();
-            error_log('Transaction committed successfully');
 
             // Set success message and redirect
             $_SESSION['success_message'] = 'Product added successfully.';
@@ -158,14 +136,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } catch (Exception $e) {
             // Rollback transaction on error
             $pdo->rollBack();
-            error_log('Error adding product: ' . $e->getMessage());
-            error_log('Stack trace: ' . $e->getTraceAsString());
-            $error = 'Error: ' . $e->getMessage();
+            error_log($e->getMessage());
+            $error = 'An error occurred while adding the product. Please try again.';
         }
     }
 }
 
 $page_title = 'Add New Product';
+
+// Function to format phone number to Cameroon format
+function formatCameroonPhone($phone) {
+    // Remove all non-digit characters
+    $phone = preg_replace('/[^0-9]/', '', $phone);
+    
+    // If number starts with 0, replace with +237
+    if (substr($phone, 0, 1) === '0') {
+        $phone = '+237' . substr($phone, 1);
+    }
+    // If number doesn't have country code, add it
+    elseif (substr($phone, 0, 4) !== '+237') {
+        $phone = '+237' . $phone;
+    }
+    
+    return $phone;
+}
+
+// Format farmer's phone number if exists
+$farmer['phone'] = !empty($farmer['phone']) ? formatCameroonPhone($farmer['phone']) : '';
+
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -200,6 +198,42 @@ $page_title = 'Add New Product';
                         <?php endif; ?>
 
                         <form method="POST" enctype="multipart/form-data" class="needs-validation" novalidate>
+                            <!-- Contact Information Section -->
+                            <div class="card mb-4">
+                                <div class="card-header bg-light">
+                                    <h5 class="mb-0">Contact Information</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row g-3">
+                                        <div class="col-md-6">
+                                            <label for="phone" class="form-label">WhatsApp Number *</label>
+                                            <div class="input-group">
+                                                <span class="input-group-text">+237</span>
+                                                <input type="tel" class="form-control" id="phone" name="phone" 
+                                                       pattern="[0-9]{9}" required
+                                                       value="<?php echo substr($farmer['phone'], 4) ?? ''; ?>"
+                                                       placeholder="6XXXXXXXX">
+                                            </div>
+                                            <div class="form-text">Enter your 9-digit number without the country code</div>
+                                            <div class="invalid-feedback">
+                                                Please enter a valid Cameroon phone number.
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label for="location" class="form-label">Location *</label>
+                                            <input type="text" class="form-control" id="location" name="location" 
+                                                   required
+                                                   value="<?php echo htmlspecialchars($farmer['address'] ?? ''); ?>"
+                                                   placeholder="City, Region">
+                                            <div class="invalid-feedback">
+                                                Please enter your location.
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Product Information -->
                             <div class="row g-3">
                                 <div class="col-md-6">
                                     <label for="name" class="form-label">Product Name *</label>
@@ -235,11 +269,11 @@ $page_title = 'Add New Product';
                                 </div>
 
                                 <div class="col-md-4">
-                                    <label for="price" class="form-label">Price *</label>
+                                    <label for="price" class="form-label">Price (XAF) *</label>
                                     <div class="input-group">
-                                        <span class="input-group-text">$</span>
+                                        <span class="input-group-text">XAF</span>
                                         <input type="number" class="form-control" id="price" name="price" 
-                                               step="0.01" min="0" required
+                                               step="100" min="0" required
                                                value="<?php echo isset($_POST['price']) ? htmlspecialchars($_POST['price']) : ''; ?>">
                                     </div>
                                     <div class="invalid-feedback">
@@ -256,6 +290,8 @@ $page_title = 'Add New Product';
                                         <option value="piece" <?php echo isset($_POST['unit']) && $_POST['unit'] === 'piece' ? 'selected' : ''; ?>>Piece</option>
                                         <option value="dozen" <?php echo isset($_POST['unit']) && $_POST['unit'] === 'dozen' ? 'selected' : ''; ?>>Dozen</option>
                                         <option value="bundle" <?php echo isset($_POST['unit']) && $_POST['unit'] === 'bundle' ? 'selected' : ''; ?>>Bundle</option>
+                                        <option value="bag" <?php echo isset($_POST['unit']) && $_POST['unit'] === 'bag' ? 'selected' : ''; ?>>Bag</option>
+                                        <option value="basket" <?php echo isset($_POST['unit']) && $_POST['unit'] === 'basket' ? 'selected' : ''; ?>>Basket</option>
                                     </select>
                                     <div class="invalid-feedback">
                                         Please select a unit.
@@ -328,22 +364,13 @@ $page_title = 'Add New Product';
             });
         })();
 
-        // Preview image before upload
-        document.getElementById('image').addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (file) {
-                if (file.size > 5 * 1024 * 1024) {
-                    alert('File size too large. Maximum size is 5MB.');
-                    this.value = '';
-                    return;
-                }
-                
-                if (!['image/jpeg', 'image/png', 'image/gif'].includes(file.type)) {
-                    alert('Invalid file type. Only JPG, PNG and GIF are allowed.');
-                    this.value = '';
-                    return;
-                }
+        // Phone number formatting
+        document.getElementById('phone').addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, '');
+            if (value.length > 9) {
+                value = value.substr(0, 9);
             }
+            e.target.value = value;
         });
     </script>
 </body>
