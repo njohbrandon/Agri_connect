@@ -1,0 +1,18 @@
+Options -Indexes
+RewriteEngine On
+
+# Ensure proper base path
+RewriteBase /farmers_market_place/
+
+# Handle PHP files
+<FilesMatch "\.(php)$">
+    Require all granted
+</FilesMatch>
+
+# Allow access to assets and uploads
+<FilesMatch "\.(jpg|jpeg|png|gif|css|js|ico)$">
+    Require all granted
+</FilesMatch>
+
+# Redirect 404 errors
+ErrorDocument 404 /farmers_market_place/404.php 

@@ -15,9 +15,14 @@ $email = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $email = filter_input(INPUT_POST, 'email', FILTER_SANITIZE_EMAIL);
     $password = $_POST['password'] ?? '';
+    $csrf_token = $_POST['csrf_token'] ?? '';
 
     if (empty($email) || empty($password)) {
         $error = 'Please fill in all fields.';
+    } elseif (!verifyCSRFToken($csrf_token)) {
+        $error = 'Invalid form submission, please try again.';
+    } elseif (checkLoginAttempts($_SERVER['REMOTE_ADDR'])) {
+        $error = 'Too many login attempts. Please try again in 15 minutes.';
     } else {
         try {
             $stmt = $pdo->prepare('SELECT * FROM farmers WHERE email = ?');
@@ -29,6 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 header('Location: dashboard.php');
                 exit();
             } else {
+                recordLoginAttempt($_SERVER['REMOTE_ADDR']);
                 $error = 'Invalid email or password.';
             }
         } catch (PDOException $e) {
@@ -80,6 +86,7 @@ $page_title = 'Farmer Login';
                         <?php endif; ?>
 
                         <form method="POST" action="" class="needs-validation" novalidate>
+                            <?php csrfField(); ?>
                             <div class="mb-3">
                                 <label for="email" class="form-label">Email address</label>
                                 <div class="input-group">

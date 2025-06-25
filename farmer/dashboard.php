@@ -174,7 +174,7 @@ $page_title = 'Farmer Dashboard';
                                                         </div>
                                                     </div>
                                                 </td>
-                                                <td>$<?php echo number_format($product['price'], 2); ?></td>
+                                                <td><?php echo formatPrice($product['price']); ?></td>
                                                 <td>
                                                     <span class="badge bg-<?php echo $product['status'] === 'active' ? 'success' : 'secondary'; ?>">
                                                         <?php echo ucfirst($product['status']); ?>

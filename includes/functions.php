@@ -42,12 +42,12 @@ function uploadImage($file, $destination) {
 }
 
 /**
- * Format price in XAF
+ * Format price
  * @param float $price
  * @return string
  */
 function formatPrice($price) {
-    return number_format($price, 0, '.', ',') . ' XAF';
+    return number_format($price, 0) . ' XAF';
 }
 
 /**
@@ -221,5 +221,88 @@ function searchProducts($query, $filters = []) {
     }
     
     return $products;
+}
+
+/**
+ * Check for too many login attempts
+ * @param string $ip
+ * @return bool
+ */
+function checkLoginAttempts($ip) {
+    $max_attempts = 5;
+    $lockout_time = 900; // 15 minutes
+
+    try {
+        global $pdo;
+        
+        // Clean old attempts
+        $stmt = $pdo->prepare('DELETE FROM login_attempts WHERE attempt_time < ?');
+        $stmt->execute([date('Y-m-d H:i:s', time() - $lockout_time)]);
+        
+        // Count recent attempts
+        $stmt = $pdo->prepare('SELECT COUNT(*) FROM login_attempts WHERE ip_address = ? AND attempt_time > ?');
+        $stmt->execute([$ip, date('Y-m-d H:i:s', time() - $lockout_time)]);
+        $attempts = $stmt->fetchColumn();
+        
+        return $attempts >= $max_attempts;
+    } catch (PDOException $e) {
+        error_log($e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Record failed login attempt
+ * @param string $ip
+ */
+function recordLoginAttempt($ip) {
+    try {
+        global $pdo;
+        $stmt = $pdo->prepare('INSERT INTO login_attempts (ip_address, attempt_time) VALUES (?, NOW())');
+        $stmt->execute([$ip]);
+    } catch (PDOException $e) {
+        error_log($e->getMessage());
+    }
+}
+
+/**
+ * Generate CSRF token
+ * @return string
+ */
+function generateCSRFToken() {
+    if (empty($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    }
+    return $_SESSION['csrf_token'];
+}
+
+/**
+ * Verify CSRF token
+ * @param string $token
+ * @return bool
+ */
+function verifyCSRFToken($token) {
+    if (empty($_SESSION['csrf_token']) || empty($token)) {
+        return false;
+    }
+    return hash_equals($_SESSION['csrf_token'], $token);
+}
+
+/**
+ * Output CSRF token field
+ */
+function csrfField() {
+    echo '<input type="hidden" name="csrf_token" value="' . generateCSRFToken() . '">';
+}
+
+/**
+ * Get the current page URL
+ * @return string
+ */
+function getCurrentURL() {
+    $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? 'https://' : 'http://';
+    $host = $_SERVER['HTTP_HOST'];
+    $uri = $_SERVER['REQUEST_URI'];
+    return $protocol . $host . $uri;
 }
 ?> 
